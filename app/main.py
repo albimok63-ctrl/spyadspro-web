@@ -8,17 +8,17 @@ Vedi docs/API_VERSIONING.md.
 """
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse, Response
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.v1 import health as health_v1
 from app.api.v1 import items as items_v1
+from app.cache.redis_client import get_client as get_redis_client
 from app.core.config import Settings
 from app.core.dependencies import get_settings
 from app.core.exceptions import ConflictError, ItemNotFoundError
 from app.core.logging import get_logger
-from app.cache.redis_client import get_client as get_redis_client
-from app.core.metrics import PrometheusMiddleware, record_health_check
+from app.core.metrics import record_health_check
 from app.core.middleware import RequestIdAndLoggingMiddleware
 from app.db.init_db import init_db
 
@@ -40,6 +40,12 @@ def create_app() -> FastAPI:
     """Build FastAPI app, attach routers and global REST error handlers."""
     settings = get_settings()
     app = FastAPI(title=settings.app_name, version=settings.version, debug=settings.debug)
+    Instrumentator().instrument(app).expose(
+        app,
+        endpoint="/metrics",
+        include_in_schema=False,
+    )
+    LOG.info("Prometheus metrics enabled at /metrics")
 
     @app.exception_handler(ItemNotFoundError)
     def not_found_handler(_request: object, exc: ItemNotFoundError) -> JSONResponse:
@@ -63,15 +69,6 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=500, content=_error_json("Internal server error"))
 
     app.add_middleware(RequestIdAndLoggingMiddleware)
-    app.add_middleware(PrometheusMiddleware)
-
-    @app.get("/metrics")
-    def metrics() -> Response:
-        """Espone metriche Prometheus (scraping)."""
-        return Response(
-            content=generate_latest(),
-            media_type=CONTENT_TYPE_LATEST,
-        )
 
     @app.get("/ready")
     def ready() -> JSONResponse:

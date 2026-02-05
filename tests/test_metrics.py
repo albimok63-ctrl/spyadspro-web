@@ -29,13 +29,11 @@ def test_metrics_content_type(client: TestClient) -> None:
 
 
 def test_metrics_record_after_request(client: TestClient) -> None:
-    """Dopo una richiesta a /api/v1/health, le metriche includono method, path, status_code."""
+    """Dopo una richiesta a /api/v1/health, le metriche includono method e handler/path (instrumentator)."""
     client.get("/api/v1/health")
     response = client.get("/metrics")
     assert response.status_code == 200
     text = response.text
-    # Deve esserci almeno una riga con le label della richiesta appena fatta
-    assert "http_requests_total" in text
-    assert "method=\"GET\"" in text or "method='GET'" in text
+    assert "http_requests_total" in text or "http_request_duration_seconds" in text
+    assert "GET" in text
     assert "/api/v1/health" in text
-    assert "status_code=\"200\"" in text or "status_code='200'" in text

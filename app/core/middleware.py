@@ -1,11 +1,12 @@
 """
-Middleware FastAPI: request_id e log strutturato JSON per ogni request/response.
-Propagazione X-Request-ID: se il client invia l'header, viene riutilizzato (correlazione distribuita).
-Contesto: request_id in contextvar per log applicativi e errori (debugging distribuito, tracing).
+Middleware FastAPI: request_id (uuid4), durata, log strutturato JSON.
+Un solo evento "request_completed" per richiesta: service_name, request_id, method, path, status_code, duration_ms.
+X-Request-ID in response; contextvar per log applicativi/errori.
 """
 
 from __future__ import annotations
 
+import time
 import uuid
 from collections.abc import Awaitable, Callable
 
@@ -21,8 +22,8 @@ REQUEST_ID_HEADER = "X-Request-ID"
 
 class RequestIdAndLoggingMiddleware(BaseHTTPMiddleware):
     """
-    Genera o riutilizza request_id (header X-Request-ID), espone in response, logga request/response.
-    Imposta request_id nel contextvar per tutta la richiesta (log applicativi e errori correlati).
+    Genera request_id (uuid4), misura durata, logga un evento request_completed in JSON.
+    Nessun log duplicato: un solo evento a fine richiesta con duration_ms.
     """
 
     async def dispatch(
@@ -33,20 +34,19 @@ class RequestIdAndLoggingMiddleware(BaseHTTPMiddleware):
         set_request_id(request_id)
         path = request.url.path
         method = request.method
+        start = time.perf_counter()
         try:
-            LOG.info(
-                "request_start",
-                extra={"request_id": request_id, "path": path, "method": method},
-            )
             response = await call_next(request)
             status_code = response.status_code
+            duration_ms = round((time.perf_counter() - start) * 1000, 2)
             LOG.info(
-                "request_end",
+                "request_completed",
                 extra={
                     "request_id": request_id,
-                    "path": path,
                     "method": method,
+                    "path": path,
                     "status_code": status_code,
+                    "duration_ms": duration_ms,
                 },
             )
             response.headers[REQUEST_ID_HEADER] = request_id

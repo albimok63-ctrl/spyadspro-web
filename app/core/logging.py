@@ -1,18 +1,29 @@
 """
 Logging strutturato JSON. Solo standard library.
-Output machine-readable per aggregazione (ELK / Loki).
-Campi: timestamp, level, service_name, message, request_id, path, method, status_code (quando disponibili).
-Contesto richiesta: request_id propagato via contextvar per log applicativi e errori.
+Output machine-readable (ELK / Loki). Stdout per Docker.
+Campi: timestamp, level, service_name, message, request_id, path, method, status_code, duration_ms (quando disponibili).
+Livello: INFO di default, DEBUG se LOG_LEVEL=DEBUG o DEBUG=true.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from typing import Any
+
+
+def _log_level_from_env() -> int:
+    """Livello da ENV: LOG_LEVEL (INFO|DEBUG) o DEBUG=true."""
+    level = os.getenv("LOG_LEVEL", "").upper()
+    if level == "DEBUG":
+        return logging.DEBUG
+    if os.getenv("DEBUG", "false").lower() in ("true", "1"):
+        return logging.DEBUG
+    return logging.INFO
 
 # Contextvar per correlazione: iniettato in ogni log durante la richiesta (middleware setta/cleara).
 _request_id_ctx: ContextVar[str | None] = ContextVar("request_id", default=None)
@@ -59,7 +70,7 @@ def _safe_iso_timestamp(record: logging.LogRecord) -> str:
 class JsonFormatter(logging.Formatter):
     """
     Formatta ogni record come una singola riga JSON.
-    Include timestamp, level, service_name, message e campi extra (request_id, path, method, status_code).
+    Campi: timestamp, level, service_name, message, request_id, path, method, status_code, duration_ms (se presenti).
     """
 
     def __init__(self, service_name: str = "app") -> None:
@@ -81,6 +92,8 @@ class JsonFormatter(logging.Formatter):
             log_dict["method"] = record.method
         if getattr(record, "status_code", None) is not None:
             log_dict["status_code"] = record.status_code
+        if getattr(record, "duration_ms", None) is not None:
+            log_dict["duration_ms"] = record.duration_ms
         if record.exc_info:
             log_dict["exception"] = self.formatException(record.exc_info)
         return json.dumps(log_dict, ensure_ascii=False)
@@ -104,6 +117,6 @@ def get_logger(name: str = "app", service_name: str | None = None) -> logging.Lo
     handler.setFormatter(JsonFormatter(service_name=svc))
     handler.addFilter(RequestIdFilter())
     logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(_log_level_from_env())
     logger.propagate = False
     return logger

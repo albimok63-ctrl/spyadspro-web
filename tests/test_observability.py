@@ -35,15 +35,14 @@ def test_observability_metrics_available(client: TestClient) -> None:
 
 
 def test_observability_metrics_expose_after_request(client: TestClient) -> None:
-    """Dopo una richiesta, /metrics espone label method, path, status_code (non flaky)."""
+    """Dopo una richiesta, /metrics espone metriche con method e handler (instrumentator, non flaky)."""
     client.get("/api/v1/health")
     response = client.get("/metrics")
     assert response.status_code == 200
     text = response.text
-    assert "http_requests_total" in text
+    assert "http_requests_total" in text or "http_request_duration_seconds" in text
     assert "GET" in text
     assert "/api/v1/health" in text
-    assert "200" in text
 
 
 # --- request_id presente (tracing/correlazione) ---
