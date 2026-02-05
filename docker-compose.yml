@@ -1,0 +1,56 @@
+# Orchestrazione locale: FastAPI + Redis. Solo Docker Compose v2.
+# Kubernetes-ready: healthcheck, rete dedicata, scaling. Redis opzionale (graceful degradation).
+# Prima di avviare: copy .env.example .env
+#
+# Scalabilità: docker compose up --scale api=2
+# Service discovery: solo nomi servizio (redis, api). Nessun IP hardcoded.
+#
+# Failure e self-healing (vedi docs/DOCKER_FAILURE_BEHAVIOR.md):
+# - API parte anche se Redis è down (nessun depends_on su redis: Redis opzionale).
+# - API non crasha se Redis cade a runtime: cache degrada silenziosamente, risposta da DB.
+# - restart: unless-stopped → Docker riavvia i container in caso di crash.
+# - healthcheck segnala stato reale: API healthy = processo up e GET /api/v1/health 200.
+
+services:
+  api:
+    build: .
+    # Nessun container_name: permette repliche con --scale api=N
+    env_file:
+      - .env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app.db:/app/app.db
+    networks:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    # Nessun depends_on su redis: API deve avviarsi anche se Redis non è disponibile (graceful degradation).
+
+  redis:
+    image: redis:7-alpine
+    container_name: spyadspro-redis
+    networks:
+      - backend
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    # Self-healing: in caso di crash Redis viene riavviato; healthcheck verifica PING.
+
+networks:
+  backend:
+    driver: bridge
