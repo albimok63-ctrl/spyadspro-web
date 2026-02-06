@@ -14,6 +14,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.api.v1 import auth as auth_v1
 from app.api.v1 import health as health_v1
 from app.api.v1 import items as items_v1
+from app.api.v1 import scraper as scraper_api
 from app.cache.redis_client import get_client as get_redis_client
 from app.core.config import Settings
 from app.core.config import get_settings
@@ -95,6 +96,7 @@ def create_app() -> FastAPI:
     app.include_router(health_v1.router, prefix=API_V1_PREFIX)
     app.include_router(auth_v1.router, prefix=API_V1_PREFIX)
     app.include_router(items_v1.router, prefix=API_V1_PREFIX)
+    app.include_router(scraper_api.router, prefix=API_V1_PREFIX)
     return app
 
 

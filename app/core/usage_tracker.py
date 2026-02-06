@@ -46,12 +46,18 @@ class UsageTrackerMiddleware(BaseHTTPMiddleware):
             },
         )
         api_key_obj = getattr(request.state, "api_key", None)
+        api_key_id: int | None = None
         if api_key_obj is not None and hasattr(api_key_obj, "id"):
+            try:
+                api_key_id = int(api_key_obj.id)
+            except (TypeError, ValueError, AttributeError, Exception):
+                pass
+        if api_key_id is not None:
             db = SessionLocal()
             try:
                 usage_service = ApiUsageService(ApiUsageRepository(db))
                 usage_service.record_usage(
-                    api_key_id=api_key_obj.id,
+                    api_key_id=api_key_id,
                     endpoint=path,
                     method=method,
                     status_code=response.status_code,

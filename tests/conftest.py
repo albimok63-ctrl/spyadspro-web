@@ -8,6 +8,7 @@ from collections.abc import Generator
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, delete
+from sqlalchemy.pool import StaticPool
 from starlette.requests import Request
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -18,18 +19,39 @@ from app.db.models import item_orm  # noqa: F401 – registra tutti i modelli su
 from app.db.models.item_orm import ItemORM
 
 # Inizializzazione DB di test a import time, PRIMA di importare app (tabelle pronte per override).
-# SQLite :memory: senza cache=shared crea un DB diverso per connessione; con file:...&cache=shared
-# tutte le connessioni condividono lo stesso DB in-memory.
+# SQLite in-memory condiviso tra tutte le sessioni di test (StaticPool).
 TEST_ENGINE = create_engine(
-    "sqlite:///file:testdb?mode=memory&cache=shared&uri=true",
+    "sqlite://",
     connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
 )
+# Creare lo schema (items, api_keys, api_usage) prima di qualsiasi sessione.
 Base.metadata.create_all(bind=TEST_ENGINE)
-TEST_SESSION_FACTORY = sessionmaker(autocommit=False, autoflush=False, bind=TEST_ENGINE)
+# Session factory solo dopo create_all, così le tabelle esistono già.
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=TEST_ENGINE)
+TEST_SESSION_FACTORY = TestingSessionLocal
 
 from app.main import app
 from app.repositories.item_repository import ItemRepository
 from app.services.item_service import ItemService
+from app.db.session import get_db
+
+# Sessione DB di test per le richieste: indipendente dalla sessione del middleware.
+def override_get_db() -> Generator[Session, None, None]:
+    """Fornisce una sessione dal DB di test; chiusa solo nel finally (lifecycle pytest/request)."""
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# Override get_db così i test usano solo la sessione dedicata (stesso engine del middleware).
+app.dependency_overrides[get_db] = override_get_db
+
+# Il middleware usage_tracker usa SessionLocal: in test deve usare lo stesso engine di test.
+import app.core.usage_tracker as _usage_tracker_module
+_usage_tracker_module.SessionLocal = TestingSessionLocal
 
 # Override a import time: l'app usa il DB di test (TEST_ENGINE) per gli endpoint items.
 def _yield_item_service():
@@ -70,9 +92,11 @@ app.dependency_overrides[rate_limit_dependency] = _mock_rate_limit
 
 
 @pytest.fixture(scope="session")
-def test_engine():
-    """Engine di test (tabelle già create a import time). Base unica condivisa."""
-    return TEST_ENGINE
+def test_engine() -> Generator:
+    """Engine SQLite di test (sqlite:///:memory:). Tabelle create all'avvio, drop alla fine della sessione."""
+    Base.metadata.create_all(bind=TEST_ENGINE)
+    yield TEST_ENGINE
+    Base.metadata.drop_all(bind=TEST_ENGINE)
 
 
 @pytest.fixture(scope="session")
@@ -91,16 +115,26 @@ def db_session(test_session_factory) -> Generator[Session, None, None]:
         db.close()
 
 
+@pytest.fixture
+def seeded_items(db_session: Session) -> ItemORM:
+    """Inserisce un item di test nel DB; ogni test che lo usa ha dati isolati."""
+    item = ItemORM(name="test item", description="")
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+    return item
+
+
 @pytest.fixture(autouse=True)
 def _override_db() -> Generator[None, None, None]:
-    """Assicura tabelle su TEST_ENGINE prima di ogni test (override già impostati a import time)."""
+    """Esegue Base.metadata.create_all(bind=TEST_ENGINE) prima di ogni test; tabelle pronte prima del TestClient."""
     Base.metadata.create_all(bind=TEST_ENGINE)
     yield
 
 
 @pytest.fixture(autouse=True)
-def _clean_items(test_session_factory) -> Generator[None, None, None]:
-    """Isolamento: svuota la tabella items prima di ogni test."""
+def _clean_items(_override_db: None, test_session_factory) -> Generator[None, None, None]:
+    """Isolamento: svuota la tabella items prima di ogni test (dipende da _override_db)."""
     db = test_session_factory()
     try:
         db.execute(delete(ItemORM))
@@ -111,6 +145,6 @@ def _clean_items(test_session_factory) -> Generator[None, None, None]:
 
 
 @pytest.fixture
-def client() -> TestClient:
-    """HTTP client per test API. Non avvia server."""
+def client(_override_db: None) -> TestClient:
+    """HTTP client per test API. Tabelle create da _override_db prima della creazione del client."""
     return TestClient(app)

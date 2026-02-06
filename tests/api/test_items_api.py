@@ -22,8 +22,8 @@ def test_post_items_returns_201_created(client: TestClient) -> None:
     assert data["id"] >= 1
 
 
-def test_get_items_returns_200_and_list(client: TestClient) -> None:
-    """GET /api/v1/items ritorna 200 e lista di item."""
+def test_get_items_returns_200_and_list(seeded_items, client: TestClient) -> None:
+    """GET /api/v1/items ritorna 200 e lista di item (dati da fixture + POST)."""
     client.post("/api/v1/items", json={"name": "One", "description": ""})
     client.post("/api/v1/items", json={"name": "Two", "description": "Second"})
     response = client.get("/api/v1/items")
@@ -31,6 +31,7 @@ def test_get_items_returns_200_and_list(client: TestClient) -> None:
     items = response.json()
     assert isinstance(items, list)
     names = {i["name"] for i in items}
+    assert "test item" in names
     assert "One" in names
     assert "Two" in names
     for i in items:
