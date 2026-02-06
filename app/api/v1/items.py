@@ -5,8 +5,7 @@ Response model espliciti; 404 quando la risorsa non esiste. API stateless, versi
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
-from app.core.dependencies import get_item_service
-from app.core.security import get_current_user
+from app.core.dependencies import get_api_key, get_item_service, rate_limit_dependency
 from app.models.item import ItemCreate, ItemRead
 from app.services.item_service import ItemService
 from app.tasks.background import on_item_created
@@ -37,7 +36,8 @@ def create_item(
     body: ItemCreate,
     background_tasks: BackgroundTasks,
     service: ItemService = Depends(get_item_service),
-    _user_id: str = Depends(get_current_user),
+    _api_key: str = Depends(get_api_key),
+    _user_id: str = Depends(rate_limit_dependency),
 ) -> ItemRead:
     """Crea un item. Body: name (obbligatorio), description. Restituisce l'item creato con id."""
     created = service.create_item(name=body.name, description=body.description)
@@ -53,7 +53,8 @@ def create_item(
 )
 def list_items(
     service: ItemService = Depends(get_item_service),
-    _user_id: str = Depends(get_current_user),
+    _api_key: str = Depends(get_api_key),
+    _user_id: str = Depends(rate_limit_dependency),
 ) -> list[ItemRead]:
     """Elenco di tutti gli item."""
     items = service.get_all_items()
@@ -69,7 +70,8 @@ def list_items(
 def get_item(
     item_id: int,
     service: ItemService = Depends(get_item_service),
-    _user_id: str = Depends(get_current_user),
+    _api_key: str = Depends(get_api_key),
+    _user_id: str = Depends(rate_limit_dependency),
 ) -> ItemRead:
     """Restituisce un item per id. 404 se la risorsa non esiste."""
     _require_positive_item_id(item_id)
@@ -86,7 +88,8 @@ def get_item(
 def delete_item(
     item_id: int,
     service: ItemService = Depends(get_item_service),
-    _user_id: str = Depends(get_current_user),
+    _api_key: str = Depends(get_api_key),
+    _user_id: str = Depends(rate_limit_dependency),
 ) -> None:
     """Rimuove l'item. 204 se rimosso; 404 se la risorsa non esiste."""
     _require_positive_item_id(item_id)

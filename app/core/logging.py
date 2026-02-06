@@ -84,6 +84,8 @@ class JsonFormatter(logging.Formatter):
             "service_name": self._service_name,
             "message": record.getMessage(),
         }
+        if getattr(record, "event", None) is not None:
+            log_dict["event"] = record.event
         if getattr(record, "request_id", None) is not None:
             log_dict["request_id"] = record.request_id
         if getattr(record, "path", None) is not None:
@@ -94,6 +96,8 @@ class JsonFormatter(logging.Formatter):
             log_dict["status_code"] = record.status_code
         if getattr(record, "duration_ms", None) is not None:
             log_dict["duration_ms"] = record.duration_ms
+        if getattr(record, "user_id", None) is not None:
+            log_dict["user_id"] = record.user_id
         if record.exc_info:
             log_dict["exception"] = self.formatException(record.exc_info)
         return json.dumps(log_dict, ensure_ascii=False)

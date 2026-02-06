@@ -7,6 +7,8 @@ from app.db.base import Base
 from app.db.session import engine
 
 # Import esplicito modelli ORM (obbligatorio: registra le tabelle su Base.metadata)
+from app.models import api_key_orm  # noqa: F401
+from app.models import api_usage_orm  # noqa: F401
 from app.models import item_orm  # noqa: F401
 
 def init_db() -> None:

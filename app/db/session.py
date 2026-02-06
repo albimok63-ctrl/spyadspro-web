@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings
 from app.db.base import Base
+from app.db.models import api_key_orm  # noqa: F401 – registra ApiKeyORM in Base.metadata
+from app.db.models import api_usage_orm  # noqa: F401 – registra ApiUsageORM in Base.metadata
 from app.db.models import item_orm  # noqa: F401 – registra ItemORM in Base.metadata
 
 

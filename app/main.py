@@ -16,11 +16,12 @@ from app.api.v1 import health as health_v1
 from app.api.v1 import items as items_v1
 from app.cache.redis_client import get_client as get_redis_client
 from app.core.config import Settings
-from app.core.dependencies import get_settings
+from app.core.config import get_settings
 from app.core.exceptions import ConflictError, ItemNotFoundError
 from app.core.logging import get_logger
 from app.core.metrics import record_health_check
 from app.core.middleware import RequestIdAndLoggingMiddleware, SecurityHeadersMiddleware
+from app.core.usage_tracker import UsageTrackerMiddleware
 from app.db.init_db import init_db
 
 LOG = get_logger("app")
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
         LOG.error("Internal server error: %s", exc, exc_info=True)
         return JSONResponse(status_code=500, content=_error_json("Internal server error"))
 
+    app.add_middleware(UsageTrackerMiddleware)
     app.add_middleware(RequestIdAndLoggingMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
 

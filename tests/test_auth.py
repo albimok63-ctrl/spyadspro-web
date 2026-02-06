@@ -2,11 +2,13 @@
 Test autenticazione JWT: login, 401 senza token, 200 con token valido.
 """
 
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.core.security import get_current_user
+from app.core.dependencies import get_current_user, rate_limit_dependency
 
 
 def test_login_ok(client: TestClient) -> None:
@@ -33,14 +35,16 @@ def test_login_invalid_returns_401(client: TestClient) -> None:
 
 def test_items_without_token_returns_401(client: TestClient) -> None:
     """GET /api/v1/items senza Authorization header restituisce 401."""
-    # Rimuovi override auth così la dependency reale richiede il token.
-    orig = app.dependency_overrides.pop(get_current_user, None)
+    orig_user = app.dependency_overrides.pop(get_current_user, None)
+    orig_rate = app.dependency_overrides.pop(rate_limit_dependency, None)
     try:
         response = client.get("/api/v1/items")
         assert response.status_code == 401
     finally:
-        if orig is not None:
-            app.dependency_overrides[get_current_user] = orig
+        if orig_user is not None:
+            app.dependency_overrides[get_current_user] = orig_user
+        if orig_rate is not None:
+            app.dependency_overrides[rate_limit_dependency] = orig_rate
 
 
 def test_items_with_valid_token_returns_200(client: TestClient) -> None:
@@ -51,13 +55,17 @@ def test_items_with_valid_token_returns_200(client: TestClient) -> None:
     )
     assert login_resp.status_code == 200
     token = login_resp.json()["access_token"]
-    orig = app.dependency_overrides.pop(get_current_user, None)
+    orig_user = app.dependency_overrides.pop(get_current_user, None)
+    orig_rate = app.dependency_overrides.pop(rate_limit_dependency, None)
     try:
-        response = client.get(
-            "/api/v1/items",
-            headers={"Authorization": f"Bearer {token}"},
-        )
+        with patch("app.core.rate_limit.check_rate_limit"):
+            response = client.get(
+                "/api/v1/items",
+                headers={"Authorization": f"Bearer {token}"},
+            )
         assert response.status_code == 200
     finally:
-        if orig is not None:
-            app.dependency_overrides[get_current_user] = orig
+        if orig_user is not None:
+            app.dependency_overrides[get_current_user] = orig_user
+        if orig_rate is not None:
+            app.dependency_overrides[rate_limit_dependency] = orig_rate

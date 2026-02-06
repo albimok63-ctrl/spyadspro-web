@@ -12,6 +12,8 @@ from starlette.requests import Request
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
+from app.db.models import api_key_orm  # noqa: F401 – registra ApiKeyORM su Base
+from app.db.models import api_usage_orm  # noqa: F401 – registra ApiUsageORM su Base
 from app.db.models import item_orm  # noqa: F401 – registra tutti i modelli su Base prima di create_all
 from app.db.models.item_orm import ItemORM
 
@@ -36,15 +38,35 @@ def _yield_item_service():
         yield ItemService(repository=ItemRepository(db))
     finally:
         db.close()
-from app.core.dependencies import get_item_service
-from app.core.security import get_current_user
+from app.core.dependencies import (
+    get_api_key,
+    get_current_user,
+    get_item_service,
+    rate_limit_dependency,
+)
 
 app.dependency_overrides[get_item_service] = _yield_item_service
+
+
+def _mock_get_api_key() -> str:
+    """Bypass API key negli test esistenti."""
+    return "test-api-key"
+
+
+app.dependency_overrides[get_api_key] = _mock_get_api_key
 # JWT: bypass auth negli test esistenti (items richiedono token; override restituisce user fittizio).
 def _mock_get_current_user(request: Request) -> str:
     return "test_user"
 
 app.dependency_overrides[get_current_user] = _mock_get_current_user
+
+
+def _mock_rate_limit() -> str:
+    """Bypass rate limit negli test: nessun Redis richiesto."""
+    return "test_user"
+
+
+app.dependency_overrides[rate_limit_dependency] = _mock_rate_limit
 
 
 @pytest.fixture(scope="session")

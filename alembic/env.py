@@ -18,6 +18,8 @@ from app.core.config import Settings
 from app.db.base import Base
 
 # Import esplicito modelli ORM: registrano le tabelle su Base.metadata (obbligatorio per autogenerate)
+from app.db.models import api_key_orm  # noqa: F401
+from app.db.models import api_usage_orm  # noqa: F401
 from app.db.models import item_orm  # noqa: F401
 
 config = context.config

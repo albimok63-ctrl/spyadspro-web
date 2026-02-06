@@ -37,5 +37,5 @@ def login(body: LoginRequest) -> TokenResponse:
     """
     if body.username != MOCK_USER or body.password != MOCK_PASS:
         raise HTTPException(status_code=401, detail="Invalid username or password")
-    token = create_access_token(user_id=body.username)
+    token = create_access_token({"sub": body.username})
     return TokenResponse(access_token=token, token_type="bearer")
