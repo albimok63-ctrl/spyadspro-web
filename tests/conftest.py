@@ -8,6 +8,7 @@ from collections.abc import Generator
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, delete
+from starlette.requests import Request
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
@@ -36,7 +37,14 @@ def _yield_item_service():
     finally:
         db.close()
 from app.core.dependencies import get_item_service
+from app.core.security import get_current_user
+
 app.dependency_overrides[get_item_service] = _yield_item_service
+# JWT: bypass auth negli test esistenti (items richiedono token; override restituisce user fittizio).
+def _mock_get_current_user(request: Request) -> str:
+    return "test_user"
+
+app.dependency_overrides[get_current_user] = _mock_get_current_user
 
 
 @pytest.fixture(scope="session")

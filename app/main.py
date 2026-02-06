@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 
+from app.api.v1 import auth as auth_v1
 from app.api.v1 import health as health_v1
 from app.api.v1 import items as items_v1
 from app.cache.redis_client import get_client as get_redis_client
@@ -19,7 +20,7 @@ from app.core.dependencies import get_settings
 from app.core.exceptions import ConflictError, ItemNotFoundError
 from app.core.logging import get_logger
 from app.core.metrics import record_health_check
-from app.core.middleware import RequestIdAndLoggingMiddleware
+from app.core.middleware import RequestIdAndLoggingMiddleware, SecurityHeadersMiddleware
 from app.db.init_db import init_db
 
 LOG = get_logger("app")
@@ -64,11 +65,12 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(Exception)
     def internal_error_handler(_request: object, exc: Exception) -> JSONResponse:
-        """500 Internal Server Error – errore non gestito."""
+        """500 Internal Server Error – errore non gestito. In produzione nessun dettaglio esposto (solo log)."""
         LOG.error("Internal server error: %s", exc, exc_info=True)
         return JSONResponse(status_code=500, content=_error_json("Internal server error"))
 
     app.add_middleware(RequestIdAndLoggingMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
 
     @app.get("/ready")
     def ready() -> JSONResponse:
@@ -89,6 +91,7 @@ def create_app() -> FastAPI:
 
     # Tutti i router sotto API_V1_PREFIX: nessun endpoint fuori versione.
     app.include_router(health_v1.router, prefix=API_V1_PREFIX)
+    app.include_router(auth_v1.router, prefix=API_V1_PREFIX)
     app.include_router(items_v1.router, prefix=API_V1_PREFIX)
     return app
 

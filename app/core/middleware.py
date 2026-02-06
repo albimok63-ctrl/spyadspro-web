@@ -1,7 +1,5 @@
 """
-Middleware FastAPI: request_id (uuid4), durata, log strutturato JSON.
-Un solo evento "request_completed" per richiesta: service_name, request_id, method, path, status_code, duration_ms.
-X-Request-ID in response; contextvar per log applicativi/errori.
+Middleware FastAPI: request_id e logging; headers di sicurezza HTTP.
 """
 
 from __future__ import annotations
@@ -18,6 +16,25 @@ from app.core.logging import clear_request_id, get_logger, set_request_id
 
 LOG = get_logger("app")
 REQUEST_ID_HEADER = "X-Request-ID"
+
+# Header di sicurezza HTTP (aggiunti a ogni response).
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "X-XSS-Protection": "1; mode=block",
+}
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Aggiunge header di sicurezza a ogni risposta (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection)."""
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        response = await call_next(request)
+        for name, value in SECURITY_HEADERS.items():
+            response.headers[name] = value
+        return response
 
 
 class RequestIdAndLoggingMiddleware(BaseHTTPMiddleware):
