@@ -1,20 +1,20 @@
-"""Endpoint GET /scrape/title tramite ScraperService. Nessun DB, nessun repository."""
+"""Endpoint minimale per test scraper: GET /scrape/title, anteprima 200 caratteri HTML."""
 
 from fastapi import APIRouter
 
+from app.infrastructure.scraper.http_client import HttpClient
 from app.services.scraper_service import ScraperService
 
 
-router = APIRouter(tags=["scraper"])
+http_client = HttpClient()
+scraper_service = ScraperService(http_client)
+
+router = APIRouter(prefix="/scrape", tags=["scraper"])
 
 
-@router.get("/scrape/title")
+@router.get("/title")
 def get_scrape_title(url: str) -> dict:
-    """
-    Estrae il contenuto del tag <title> dalla pagina indicata.
-    Query: url (str).
-    """
-    service = ScraperService()
-    parser = service.fetch_and_parse(url)
-    title = parser.get_title()
-    return {"title": title}
+    """Test: GET della pagina, restituisce i primi 200 caratteri dell'HTML."""
+    html = scraper_service.fetch_html(url)
+    preview = html[:200]
+    return {"preview": preview}
