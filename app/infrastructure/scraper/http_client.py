@@ -3,6 +3,8 @@
 import random
 import time
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 DEFAULT_TIMEOUT = 10
@@ -38,14 +40,28 @@ class HttpClient:
         self.timeout = timeout
         self._headers = dict(headers) if headers else {}
         self.session = requests.Session()
+        retry = Retry(
+            total=MAX_RETRIES,
+            backoff_factor=0.5,
+            status_forcelist=list(RETRY_STATUS_CODES),
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+        self.delay = 1.0
+        self.user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/119.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/118.0 Safari/537.36",
+        ]
 
     def get(self, url: str) -> str:
         """GET verso url; restituisce response.text. Retry solo su 500/502/503/504 (max 3 tentativi, 1s tra tentativi)."""
         headers = {**DEFAULT_HEADERS, **self._headers}
         if "User-Agent" not in self._headers:
-            headers["User-Agent"] = random.choice(USER_AGENTS)
+            headers["User-Agent"] = random.choice(self.user_agents)
         for attempt in range(MAX_RETRIES):
-            time.sleep(0.5)
+            time.sleep(self.delay)
             response = self.session.get(
                 url, headers=headers, timeout=self.timeout, allow_redirects=True
             )
