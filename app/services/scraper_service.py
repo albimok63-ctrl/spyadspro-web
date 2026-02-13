@@ -2,6 +2,8 @@
 
 from app.infrastructure.scraper.http_client import HttpClient
 from app.infrastructure.scraper.spider_registry import SpiderRegistry
+from app.infrastructure.scraper.spiders.meta_title_spider import MetaTitleSpider
+from app.infrastructure.scraper.spiders.title_spider import TitleSpider
 
 
 class ScraperService:
@@ -10,10 +12,14 @@ class ScraperService:
     def __init__(self, http_client: HttpClient) -> None:
         self._http_client = http_client
         self.registry = SpiderRegistry()
+        self.registry.register("title", TitleSpider)
+        self.registry.register("meta", MetaTitleSpider)
 
     def scrape(self, spider_name: str, url: str) -> dict:
         """Ottiene lo spider dal registry, crea istanza, esegue run(url). Solleva ValueError se spider non trovato."""
-        spider_class = self.registry.get_spider(spider_name)
+        spider_class = self.registry.get(spider_name)
+        if spider_class is None:
+            raise ValueError(f"Spider '{spider_name}' not found")
         spider = spider_class(self._http_client)
         return spider.run(url)
 
@@ -22,7 +28,9 @@ class ScraperService:
         return self._http_client.get(url)
 
     def scrape_title(self, url: str) -> dict:
-        """Ottiene spider 'title' dal registry, esegue run(url) e restituisce il risultato."""
-        spider_class = self.registry.get_spider("title")
+        """Ottiene spider 'title' dal registry, crea istanza, esegue run(url) e restituisce il risultato."""
+        spider_class = self.registry.get("title")
+        if spider_class is None:
+            raise ValueError("Spider 'title' not found")
         spider = spider_class(self._http_client)
         return spider.run(url)

@@ -1,15 +1,19 @@
-"""Normalizzatore di output spider: garantisce chiavi standard (title, description, source_url)."""
+"""Normalizzazione standard dei dati restituiti dagli spider. Schema comune per multi-fonte."""
 
-STANDARD_KEYS = ("title", "description", "source_url")
+from datetime import datetime
 
 
-class ScraperOutputNormalizer:
-    """Normalizza un dict di output spider con chiavi title, description, source_url."""
+class ScraperNormalizer:
+    """Normalizza l'output degli spider in struttura standard per Meta Ads, TikTok Ads, landing, ecc."""
 
-    def normalize(self, data: dict) -> dict:
-        """Restituisce un dict con title, description, source_url; valori mancanti impostati a None."""
-        out = dict(data)
-        for key in STANDARD_KEYS:
-            if key not in out:
-                out[key] = None
-        return out
+    def normalize(self, data: dict, source: str) -> dict | None:
+        """Restituisce un dict con source, title, description, url, fetched_at. Se data è None restituisce None."""
+        if data is None:
+            return None
+        return {
+            "source": source,
+            "title": data.get("title"),
+            "description": data.get("description"),
+            "url": data.get("url"),
+            "fetched_at": datetime.utcnow().isoformat(),
+        }

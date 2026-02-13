@@ -1,23 +1,20 @@
-"""Registry centrale degli spider disponibili. Supporto multi-spider senza modifiche future."""
-
-from app.infrastructure.scraper.spiders.title_spider import TitleSpider
+"""Registry centrale degli spider disponibili. Supporto multi-spider senza modifiche all'engine."""
 
 
 class SpiderRegistry:
-    """Registro degli spider: get_spider(name) restituisce la classe o solleva ValueError."""
+    """Registro centralizzato degli spider: registrazione e lookup per nome."""
 
     def __init__(self) -> None:
-        self.spiders = {
-            "title": TitleSpider,
-        }
+        self._spiders: dict = {}
 
-    def get_spider(self, spider_name: str):
-        """Restituisce la classe spider corrispondente. Solleva ValueError se non esiste."""
-        spider_class = self.spiders.get(spider_name)
-        if spider_class is None:
-            raise ValueError("Spider not found")
-        return spider_class
+    def register(self, name: str, spider) -> None:
+        """Salva lo spider nel dizionario."""
+        self._spiders[name] = spider
 
     def get(self, name: str):
-        """Restituisce la classe spider o None. Preferire get_spider per errore esplicito."""
-        return self.spiders.get(name)
+        """Restituisce lo spider oppure None."""
+        return self._spiders.get(name)
+
+    def list(self) -> list:
+        """Restituisce la lista dei nomi degli spider registrati."""
+        return list(self._spiders.keys())
