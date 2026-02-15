@@ -48,6 +48,13 @@ DEFAULT_HEADERS = {
     "Cache-Control": "max-age=0",
 }
 
+# Headers di default per la sessione persistente (browser realistico)
+SESSION_DEFAULT_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Connection": "keep-alive",
+}
+
 
 def _exponential_backoff_with_jitter(attempt: int) -> float:
     """Ritardo = min(cap, base^attempt) + jitter casuale (comportamento umano)."""
@@ -61,24 +68,47 @@ def _human_delay(min_sec: float = DELAY_BEFORE_REQUEST_MIN, max_sec: float = DEL
     time.sleep(random.uniform(min_sec, max_sec))
 
 
-class RealisticSession(requests.Session):
-    """Sessione con header anti-fingerprinting (2026) e fetch_with_retry per 403/429."""
+class RealisticSession:
+    """Sessione HTTP persistente: cookie e stato in memoria, headers realistici, fetch_with_retry per 403/429."""
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.headers.update(ANTI_FINGERPRINT_HEADERS)
+    def __init__(self) -> None:
+        self.session = requests.Session()
         self._user_agents = list(USER_AGENTS)
+        self.session.headers["User-Agent"] = random.choice(self._user_agents)
+        self.session.headers.update(SESSION_DEFAULT_HEADERS)
         retry = Retry(
             total=MAX_RETRIES,
             backoff_factor=0.5,
             status_forcelist=list(RETRY_STATUS_CODES),
         )
         adapter = HTTPAdapter(max_retries=retry)
-        self.mount("http://", adapter)
-        self.mount("https://", adapter)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+
+    @property
+    def headers(self):
+        """Espone gli headers della sessione (per compatibilità con fetch_page e HttpClient)."""
+        return self.session.headers
 
     def _rotate_user_agent(self) -> None:
-        self.headers["User-Agent"] = random.choice(self._user_agents)
+        self.session.headers["User-Agent"] = random.choice(self._user_agents)
+
+    def get(
+        self,
+        url: str,
+        headers: dict | None = None,
+        timeout: int = DEFAULT_TIMEOUT,
+        allow_redirects: bool = True,
+        **kwargs,
+    ) -> requests.Response:
+        """GET tramite sessione: headers di default + eventuali custom (sovrascrivono), timeout, redirect. Rilancia RequestException."""
+        return self.session.get(
+            url,
+            headers=headers,
+            timeout=timeout,
+            allow_redirects=allow_redirects,
+            **kwargs,
+        )
 
     def fetch_with_retry(
         self,
@@ -108,10 +138,6 @@ class RealisticSession(requests.Session):
                 response.raise_for_status()
             response.raise_for_status()
         raise RuntimeError("fetch_with_retry exhausted retries without returning")
-
-    def get(self, url, **kwargs):
-        """Override per applicare headers di sessione (compatibile con requests.Session.get)."""
-        return super().get(url, **kwargs)
 
 
 def fetch_page(url: str, headers: dict | None = None) -> str:

@@ -4,6 +4,7 @@ from app.infrastructure.scraper.http_client import HttpClient
 from app.infrastructure.scraper.normalizer import ScraperNormalizer
 from app.infrastructure.scraper.pipeline import ScraperPipeline
 from app.infrastructure.scraper.result_store import ResultStore
+from app.services.intelligence.intelligence_engine import IntelligenceEngine
 
 
 class ScraperEngine:
@@ -14,6 +15,7 @@ class ScraperEngine:
         self.normalizer = ScraperNormalizer()
         self.pipeline = ScraperPipeline()
         self.result_store = ResultStore()
+        self.intelligence_engine = IntelligenceEngine()
         self.spiders: list = []
 
     def register_spider(self, spider) -> None:
@@ -53,6 +55,9 @@ class ScraperEngine:
             )
             if normalized is not None:
                 stable["data"] = normalized
+            data = stable["data"]
+            intelligence = self.intelligence_engine.evaluate(data)
+            data.update(intelligence)
             self.result_store.add(stable)
             results_list.append(stable)
         return results_list
